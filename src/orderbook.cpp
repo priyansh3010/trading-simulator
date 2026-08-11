@@ -6,6 +6,7 @@
 #include <map>
 #include <unordered_map>
 #include <string>
+#include <iostream>
 using namespace std;
 
 OrderBook::OrderBook() {
@@ -19,15 +20,14 @@ void OrderBook::addOrder(string instrumentName, Side side, int price, U64 quanti
     bool found;
     U64 instrumentId;
     if (instrumentToId_.find(instrumentName) == instrumentToId_.end()) {
-        instrumentToId_[instrumentName] = instrumentId_++;
+        instrumentToId_[instrumentName] = instrumentId_;
+        instrumentId = instrumentId_++;
         found = false;
     }
     else {
         instrumentId = instrumentToId_[instrumentName];
         found = true;
     }
-
-    // create new order
     
     vector<U64> toRemove;
     // add to appropriate map and list
@@ -64,7 +64,7 @@ void OrderBook::addOrder(string instrumentName, Side side, int price, U64 quanti
     
     else {
         if (found) {
-            for (auto& [p, orderList] : asks_) {
+            for (auto& [p, orderList] : bids_) {
                 if (p < price) break; // break outer loop if p becomes lesser than minimum sell price
                 if (quantity == 0) break; // early break for order completion before insertion
                 
@@ -91,10 +91,12 @@ void OrderBook::addOrder(string instrumentName, Side side, int price, U64 quanti
         }
     }
 
-    if (quantity == 0) {
-        for (int const& orderId : toRemove) cancelOrder(orderId);
-        return;
-    }
+    
+    // remove completed orders
+    for (int const& orderId : toRemove) cancelOrder(orderId);
+    
+    // early return if new order is already completed to avoid it being added to order book
+    if (quantity == 0) return;
     
     // add to hashmap for quick lookups for future
     orderMap_[orderId_] = *order;
@@ -135,4 +137,24 @@ void OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
 
     // replace order with the updated one in the hashMap
     orderMap_[orderId] = order;
+}
+
+void OrderBook::printOrders() {
+    cout << "---------Bids Map---------" << endl;
+    for (auto& [p, orderList] : bids_) {
+        cout << "Price: " << p << endl;
+        for (auto it = orderList.begin(); it != orderList.end(); it++) {
+            cout << "   " << it->instrumentId << " " << it->orderId << " " << it->participantId <<
+                      " " << (it->side == BUY ? "Buy" : "Sell") << " " << it->price << " " << it->quantity << endl;
+        }
+    }
+
+    cout << "---------Asks Map---------" << endl;
+    for (auto& [p, orderList] : asks_) {
+        cout << "Price: " << p << endl;
+        for (auto it = orderList.begin(); it != orderList.end(); it++) {
+            cout << "   " << it->instrumentId << " " << it->orderId << " " << it->participantId <<
+                      " " << (it->side == BUY ? "Buy" : "Sell") << " " << it->price << " " << it->quantity << endl;
+        }
+    }
 }
