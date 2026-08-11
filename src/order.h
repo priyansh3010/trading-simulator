@@ -15,4 +15,8 @@ struct Order {
 
     Order(U64 order_id, U64 participant_id, U64 instrument_id, Side s, int p, U64 q, U64 t)
     : orderId(order_id), participantId(participant_id), instrumentId(instrument_id), side(s), price(p), quantity(q), timestamp(t) {}
+
+    bool operator==(const Order& other) const {
+        return orderId == other.orderId;
+    }
 };
