@@ -120,18 +120,19 @@ void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& to
     }
 }
 
-void OrderBook::updateOrder(U64 orderId, string instrumentName, int newPrice, int newQuantity) {
+pair<bool, U64> OrderBook::updateOrder(U64 orderId, string instrumentName, int newPrice, int newQuantity) {
     // access order in question
-    Order* order = orderMap_[orderId];
-    orderMap_.erase(orderId);
+    Order* order = orderMap_.find(orderId) != orderMap_.end() ? orderMap_[orderId] : nullptr;
+
+    if (order == nullptr) return {false, orderId_};
 
     // delete order from map
     cancelOrder(orderId);
     
-    if (newQuantity == 0) return; // if new quantity is 0, take it as order has cancelled
+    if (newQuantity == 0) return {false, orderId_}; // if new quantity is 0, take it as order has cancelled
     
     // add new order to map
-    addOrder(instrumentName, order->side, newPrice, newQuantity, order->timestamp);
+    return addOrder(instrumentName, order->side, newPrice, newQuantity, order->timestamp);
 }
 
 void OrderBook::printOrders() {
