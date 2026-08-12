@@ -5,6 +5,7 @@
 #include <list>
 #include <map>
 #include <unordered_map>
+#include <utility>
 #include <string>
 #include <iostream>
 using namespace std;
@@ -15,7 +16,7 @@ OrderBook::OrderBook() {
     instrumentId_ = 0;
 }
 
-void OrderBook::addOrder(string instrumentName, Side side, int price, U64 quantity, U64 timestamp) {
+pair<bool, U64> OrderBook::addOrder(string instrumentName, Side side, int price, U64 quantity, U64 timestamp) {
     // check if current instrument has entered book before
     bool found;
     U64 instrumentId;
@@ -51,11 +52,12 @@ void OrderBook::addOrder(string instrumentName, Side side, int price, U64 quanti
     for (int const& orderId : toRemove) cancelOrder(orderId);
     
     // early return if new order is already completed to avoid it being added to order book
-    if (quantity == 0) return;
+    if (quantity == 0) return {false, 0};
     
     // add to hashmap for quick lookups for future
     orderMap_[orderId_] = *order;
     orderId_++; // increment order id for now. more sophistication later on
+    return {true, order->orderId};
 }
 
 void OrderBook::cancelOrder(U64 orderId) {
