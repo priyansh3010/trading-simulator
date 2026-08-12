@@ -37,14 +37,14 @@ pair<bool, U64> OrderBook::addOrder(string instrumentName, Side side, int price,
     if (side == BUY) {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, instrumentId, side, price, quantity, timestamp);
-            bids_[price].push_back(*order);
+            bids_[price].push_back(order);
         }
     }
     
     else {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, instrumentId, side, price, quantity, timestamp);
-            asks_[price].push_back(*order);
+            asks_[price].push_back(order);
         }
     }
     
@@ -55,18 +55,18 @@ pair<bool, U64> OrderBook::addOrder(string instrumentName, Side side, int price,
     if (quantity == 0) return {false, orderId_};
     
     // add to hashmap for quick lookups for future
-    orderMap_[orderId_] = *order;
+    orderMap_[orderId_] = order;
     orderId_++; // increment order id for now. more sophistication later on
     return {true, order->orderId};
 }
 
 void OrderBook::cancelOrder(U64 orderId) {
     // access order in question
-    Order order = orderMap_[orderId];
+    Order* order = orderMap_[orderId];
     
     // delete order from the map and list it is in
-    if (order.side == BUY) bids_[order.price].remove(order);
-    else asks_[order.price].remove(order);
+    if (order->side == BUY) bids_[order->price].remove(order);
+    else asks_[order->price].remove(order);
     
     // delete order from hashMap too
     orderMap_.erase(orderId);
@@ -78,17 +78,17 @@ void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& to
             if (p > price) break; // break outer loop if p becomes greater than maximum buy price
             if (quantity == 0) break; // early break for order completion before insertion
             
-            for (auto it = orderList.begin(); it != orderList.end(); it++) {
-                if (it->instrumentId == instrumentId) {
-                    if (quantity >= it->quantity) {
-                        quantity -= it->quantity;
+            for (Order* order : orderList) {
+                if (order->instrumentId == instrumentId) {
+                    if (quantity >= order->quantity) {
+                        quantity -= order->quantity;
                         
                         // just 'cancel' sell order for now (it is complete)
                         // will create seperate function for completed orders later
-                        toRemove.push_back(it->orderId);
+                        toRemove.push_back(order->orderId);
                     }
                     else {
-                        it->quantity -= quantity;
+                        order->quantity -= quantity;
                         quantity = 0;
                     }
                 } 
@@ -100,17 +100,18 @@ void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& to
             if (p < price) break; // break outer loop if p becomes lesser than minimum sell price
             if (quantity == 0) break; // early break for order completion before insertion
             
-            for (auto it = orderList.begin(); it != orderList.end(); it++) {
-                if (it->instrumentId == instrumentId) {
-                    if (quantity >= it->quantity) {
-                        quantity -= it->quantity;
+            for (Order* order : orderList) {
+                if (order->instrumentId == instrumentId) {
+                    if (quantity >= order->quantity) {
+                        quantity -= order->quantity;
+                        order->quantity = 0;
                         
                         // just 'cancel' sell order for now (it is complete)
                         // will create seperate function for completed orders later
-                        toRemove.push_back(it->orderId);
+                        toRemove.push_back(order->orderId);
                     }
                     else {
-                        it->quantity -= quantity;
+                        order->quantity -= quantity;
                         quantity = 0;
                     }
                 } 
@@ -121,22 +122,22 @@ void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& to
 
 void OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
     // access order in question
-    Order order = orderMap_[orderId];
+    Order* order = orderMap_[orderId];
     
     // updating order from the map and list it is in
     // minor optimization possible here
     // think unnecessary deletions in some cases (when price isnt the thing being updated)
-    if (order.side == BUY) {
-        bids_[order.price].remove(order);
-        order.price = newPrice;
-        order.quantity = newQuantity;
-        bids_[order.price].push_back(order);
+    if (order->side == BUY) {
+        bids_[order->price].remove(order);
+        order->price = newPrice;
+        order->quantity = newQuantity;
+        bids_[order->price].push_back(order);
     }
     else {
-        asks_[order.price].remove(order);
-        order.price = newPrice;
-        order.quantity = newQuantity;
-        asks_[order.price].push_back(order);    
+        asks_[order->price].remove(order);
+        order->price = newPrice;
+        order->quantity = newQuantity;
+        asks_[order->price].push_back(order);    
     }
 
     // replace order with the updated one in the hashMap
@@ -147,18 +148,18 @@ void OrderBook::printOrders() {
     cout << "---------Bids Map---------" << endl;
     for (auto& [p, orderList] : bids_) {
         cout << "Price: " << p << endl;
-        for (auto it = orderList.begin(); it != orderList.end(); it++) {
-            cout << "   " << it->instrumentId << " " << it->orderId << " " << it->participantId <<
-                      " " << (it->side == BUY ? "Buy" : "Sell") << " " << it->price << " " << it->quantity << endl;
+        for (Order* order : orderList) {
+            cout << "   " << order->instrumentId << " " << order->orderId << " " << order->participantId <<
+                      " " << "Buy" << " " << order->price << " " << order->quantity << " " << order->timestamp << endl;
         }
     }
 
     cout << "---------Asks Map---------" << endl;
     for (auto& [p, orderList] : asks_) {
         cout << "Price: " << p << endl;
-        for (auto it = orderList.begin(); it != orderList.end(); it++) {
-            cout << "   " << it->instrumentId << " " << it->orderId << " " << it->participantId <<
-                      " " << (it->side == BUY ? "Buy" : "Sell") << " " << it->price << " " << it->quantity << endl;
+        for (Order* order : orderList) {
+            cout << "   " << order->instrumentId << " " << order->orderId << " " << order->participantId <<
+                      " " << "Sell" << " " << order->price << " " << order->quantity << " " << order->timestamp << endl;
         }
     }
 }
@@ -167,7 +168,7 @@ bool OrderBook::orderExists(U64 orderId){
     return orderMap_.find(orderId) != orderMap_.end();
 }
 
-Order OrderBook::getOrder(U64 orderId) {
+Order* OrderBook::getOrder(U64 orderId) {
     return orderMap_[orderId];
 }
 
