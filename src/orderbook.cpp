@@ -120,28 +120,18 @@ void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& to
     }
 }
 
-void OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
+void OrderBook::updateOrder(U64 orderId, string instrumentName, int newPrice, int newQuantity) {
     // access order in question
     Order* order = orderMap_[orderId];
-    
-    // updating order from the map and list it is in
-    // minor optimization possible here
-    // think unnecessary deletions in some cases (when price isnt the thing being updated)
-    if (order->side == BUY) {
-        bids_[order->price].remove(order);
-        order->price = newPrice;
-        order->quantity = newQuantity;
-        bids_[order->price].push_back(order);
-    }
-    else {
-        asks_[order->price].remove(order);
-        order->price = newPrice;
-        order->quantity = newQuantity;
-        asks_[order->price].push_back(order);    
-    }
+    orderMap_.erase(orderId);
 
-    // replace order with the updated one in the hashMap
-    orderMap_[orderId] = order;
+    // delete order from map
+    cancelOrder(orderId);
+    
+    if (newQuantity == 0) return; // if new quantity is 0, take it as order has cancelled
+    
+    // add new order to map
+    addOrder(instrumentName, order->side, newPrice, newQuantity, order->timestamp);
 }
 
 void OrderBook::printOrders() {
