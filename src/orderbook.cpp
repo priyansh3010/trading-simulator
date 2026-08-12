@@ -168,3 +168,27 @@ int OrderBook::getDepth(int price, Side side) {
     else
         return asks_[price].size();
 }
+
+int OrderBook::getBestBid(string instrumentName) {
+    U64 instrumentId = instrumentToId_[instrumentName];
+
+    for (auto& [p, orderList] : bids_) {
+        for (Order* order : orderList) {
+            if (order->instrumentId == instrumentId) return order->price;        
+        }
+    }
+    
+    return -1;
+}
+
+int OrderBook::getBestAsk(string instrumentName) {
+    U64 instrumentId = instrumentToId_[instrumentName];
+    
+    for (auto& [p, orderList] : asks_) {
+        for (Order* order : orderList) {
+            if (order->instrumentId == instrumentId) return order->price;        
+        }
+    }
+
+    return -1;
+}

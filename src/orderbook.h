@@ -32,5 +32,7 @@ public:
     bool orderExists(U64 orderId);
     Order* getOrder(U64 orderId);
     int getDepth(int price, Side side);
+    int getBestBid(string instrumentName);
+    int getBestAsk(string instrumentName);
     void printOrders();
 };
