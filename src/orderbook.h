@@ -29,5 +29,8 @@ public:
     void cancelOrder(U64 orderId);
     void updateOrder(U64 orderId, int newPrice, int newQuantity);
     void match(U64& instrumentId, int& price, Side& side, vector<U64>& toRemove, U64& quantity);
+    bool orderExists(U64 orderId);
+    Order getOrder(U64 orderId);
+    int getDepth(int price, Side side);
     void printOrders();
 };

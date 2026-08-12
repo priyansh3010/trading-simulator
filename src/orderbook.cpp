@@ -52,7 +52,7 @@ pair<bool, U64> OrderBook::addOrder(string instrumentName, Side side, int price,
     for (int const& orderId : toRemove) cancelOrder(orderId);
     
     // early return if new order is already completed to avoid it being added to order book
-    if (quantity == 0) return {false, 0};
+    if (quantity == 0) return {false, orderId_};
     
     // add to hashmap for quick lookups for future
     orderMap_[orderId_] = *order;
@@ -161,4 +161,19 @@ void OrderBook::printOrders() {
                       " " << (it->side == BUY ? "Buy" : "Sell") << " " << it->price << " " << it->quantity << endl;
         }
     }
+}
+
+bool OrderBook::orderExists(U64 orderId){
+    return orderMap_.find(orderId) != orderMap_.end();
+}
+
+Order OrderBook::getOrder(U64 orderId) {
+    return orderMap_[orderId];
+}
+
+int OrderBook::getDepth(int price, Side side) {
+    if (side == BUY)
+        return bids_[price].size();
+    else
+        return asks_[price].size();
 }
