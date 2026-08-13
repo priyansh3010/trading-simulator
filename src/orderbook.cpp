@@ -13,37 +13,23 @@ using namespace std;
 OrderBook::OrderBook() {
     orderId_ = 0;
     participantId_ = 0;
-    instrumentId_ = 0;
 }
 
-pair<bool, U64> OrderBook::addOrder(string instrumentName, Side side, int price, U64 quantity, U64 timestamp) {
-    // check if current instrument has entered book before
-    bool found;
-    U64 instrumentId;
-    if (instrumentToId_.find(instrumentName) == instrumentToId_.end()) {
-        instrumentToId_[instrumentName] = instrumentId_;
-        instrumentId = instrumentId_++;
-        found = false;
-    }
-    else {
-        instrumentId = instrumentToId_[instrumentName];
-        found = true;
-    }
-    
+pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 timestamp) {
     vector<U64> toRemove;
     // add to appropriate map and list
     Order* order;
-    if (found) match(instrumentId, price, side, toRemove, quantity);
+    match(price, side, toRemove, quantity);
     if (side == BUY) {
         if (quantity > 0) {
-            order = new Order(orderId_, participantId_, instrumentId, side, price, quantity, timestamp);
+            order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
             bids_[price].push_back(order);
         }
     }
     
     else {
         if (quantity > 0) {
-            order = new Order(orderId_, participantId_, instrumentId, side, price, quantity, timestamp);
+            order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
             asks_[price].push_back(order);
         }
     }
@@ -72,25 +58,23 @@ void OrderBook::cancelOrder(U64 orderId) {
     orderMap_.erase(orderId);
 }
 
-void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& toRemove, U64& quantity) {
+void OrderBook::match(int& price, Side& side, vector<U64>& toRemove, U64& quantity) {
     if (side == BUY) {
         for (auto& [p, orderList] : asks_) {
             if (p > price) break; // break outer loop if p becomes greater than maximum buy price
             if (quantity == 0) break; // early break for order completion before insertion
             
             for (Order* order : orderList) {
-                if (order->instrumentId == instrumentId) {
-                    if (quantity >= order->quantity) {
-                        quantity -= order->quantity;
-                        
-                        // just 'cancel' sell order for now (it is complete)
-                        // will create seperate function for completed orders later
-                        toRemove.push_back(order->orderId);
-                    }
-                    else {
-                        order->quantity -= quantity;
-                        quantity = 0;
-                    }
+                if (quantity >= order->quantity) {
+                    quantity -= order->quantity;
+                    
+                    // just 'cancel' sell order for now (it is complete)
+                    // will create seperate function for completed orders later
+                    toRemove.push_back(order->orderId);
+                }
+                else {
+                    order->quantity -= quantity;
+                    quantity = 0;
                 } 
             }
         }
@@ -101,26 +85,24 @@ void OrderBook::match(U64& instrumentId, int& price, Side& side, vector<U64>& to
             if (quantity == 0) break; // early break for order completion before insertion
             
             for (Order* order : orderList) {
-                if (order->instrumentId == instrumentId) {
-                    if (quantity >= order->quantity) {
-                        quantity -= order->quantity;
-                        order->quantity = 0;
-                        
-                        // just 'cancel' sell order for now (it is complete)
-                        // will create seperate function for completed orders later
-                        toRemove.push_back(order->orderId);
-                    }
-                    else {
-                        order->quantity -= quantity;
-                        quantity = 0;
-                    }
+                if (quantity >= order->quantity) {
+                    quantity -= order->quantity;
+                    order->quantity = 0;
+                    
+                    // just 'cancel' sell order for now (it is complete)
+                    // will create seperate function for completed orders later
+                    toRemove.push_back(order->orderId);
+                }
+                else {
+                    order->quantity -= quantity;
+                    quantity = 0;
                 } 
             }
         }
     }
 }
 
-pair<bool, U64> OrderBook::updateOrder(U64 orderId, string instrumentName, int newPrice, int newQuantity) {
+pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
     // access order in question
     Order* order = orderMap_.find(orderId) != orderMap_.end() ? orderMap_[orderId] : nullptr;
 
@@ -132,7 +114,7 @@ pair<bool, U64> OrderBook::updateOrder(U64 orderId, string instrumentName, int n
     if (newQuantity == 0) return {false, orderId_}; // if new quantity is 0, take it as order has cancelled
     
     // add new order to map
-    return addOrder(instrumentName, order->side, newPrice, newQuantity, order->timestamp);
+    return addOrder(order->side, newPrice, newQuantity, order->timestamp);
 }
 
 void OrderBook::printOrders() {
@@ -140,8 +122,8 @@ void OrderBook::printOrders() {
     for (auto& [p, orderList] : bids_) {
         cout << "Price: " << p << endl;
         for (Order* order : orderList) {
-            cout << "   " << order->instrumentId << " " << order->orderId << " " << order->participantId <<
-                      " " << "Buy" << " " << order->price << " " << order->quantity << " " << order->timestamp << endl;
+            cout << "   " << order->orderId << " " << order->participantId << " " << "BUY" << " "
+                          << order->price << " " << order->quantity << " " << order->timestamp << endl;
         }
     }
 
@@ -149,8 +131,8 @@ void OrderBook::printOrders() {
     for (auto& [p, orderList] : asks_) {
         cout << "Price: " << p << endl;
         for (Order* order : orderList) {
-            cout << "   " << order->instrumentId << " " << order->orderId << " " << order->participantId <<
-                      " " << "Sell" << " " << order->price << " " << order->quantity << " " << order->timestamp << endl;
+            cout << "   " << order->orderId << " " << order->participantId << " " << "SELL" << " "
+                          << order->price << " " << order->quantity << " " << order->timestamp << endl;
         }
     }
 }
@@ -170,24 +152,20 @@ int OrderBook::getDepth(int price, Side side) {
         return asks_[price].size();
 }
 
-int OrderBook::getBestBid(string instrumentName) {
-    U64 instrumentId = instrumentToId_[instrumentName];
-
+int OrderBook::getBestBid() {
     for (auto& [p, orderList] : bids_) {
         for (Order* order : orderList) {
-            if (order->instrumentId == instrumentId) return order->price;        
+            return order->price;        
         }
     }
     
     return -1;
 }
 
-int OrderBook::getBestAsk(string instrumentName) {
-    U64 instrumentId = instrumentToId_[instrumentName];
-    
+int OrderBook::getBestAsk() {
     for (auto& [p, orderList] : asks_) {
         for (Order* order : orderList) {
-            if (order->instrumentId == instrumentId) return order->price;        
+            return order->price;        
         }
     }
 
