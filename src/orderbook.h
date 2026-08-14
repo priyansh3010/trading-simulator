@@ -11,6 +11,7 @@ class OrderBook {
 private:
     U64 orderId_;
     U64 participantId_;
+    int orderCount;
     // Bids: sorted descending by price  
     map<int, list<Order*>, std::greater<double>> bids_;
     
@@ -30,5 +31,6 @@ public:
     int getDepth(int price, Side side);
     int getBestBid();
     int getBestAsk();
+    int getOrderCount();
     void printOrders();
 };

@@ -13,6 +13,7 @@ using namespace std;
 OrderBook::OrderBook() {
     orderId_ = 0;
     participantId_ = 0;
+    orderCount = 0;
 }
 
 pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 timestamp) {
@@ -43,6 +44,7 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     // add to hashmap for quick lookups for future
     orderMap_[orderId_] = order;
     orderId_++; // increment order id for now. more sophistication later on
+    orderCount++; 
     return {true, order->orderId};
 }
 
@@ -55,6 +57,7 @@ void OrderBook::cancelOrder(U64 orderId) {
     else asks_[order->price].remove(order);
     
     // delete order from hashMap too
+    orderCount--;
     orderMap_.erase(orderId);
 }
 
@@ -117,26 +120,6 @@ pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantit
     return addOrder(order->side, newPrice, newQuantity, order->timestamp);
 }
 
-void OrderBook::printOrders() {
-    cout << "---------Bids Map---------" << endl;
-    for (auto& [p, orderList] : bids_) {
-        cout << "Price: " << p << endl;
-        for (Order* order : orderList) {
-            cout << "   " << order->orderId << " " << order->participantId << " " << "BUY" << " "
-                          << order->price << " " << order->quantity << " " << order->timestamp << endl;
-        }
-    }
-
-    cout << "---------Asks Map---------" << endl;
-    for (auto& [p, orderList] : asks_) {
-        cout << "Price: " << p << endl;
-        for (Order* order : orderList) {
-            cout << "   " << order->orderId << " " << order->participantId << " " << "SELL" << " "
-                          << order->price << " " << order->quantity << " " << order->timestamp << endl;
-        }
-    }
-}
-
 bool OrderBook::orderExists(U64 orderId){
     return orderMap_.find(orderId) != orderMap_.end();
 }
@@ -170,4 +153,28 @@ int OrderBook::getBestAsk() {
     }
 
     return -1;
+}
+
+int OrderBook::getOrderCount() {
+    return orderCount;
+}
+
+void OrderBook::printOrders() {
+    cout << "---------Bids Map---------" << endl;
+    for (auto& [p, orderList] : bids_) {
+        cout << "Price: " << p << endl;
+        for (Order* order : orderList) {
+            cout << "   " << order->orderId << " " << order->participantId << " " << "BUY" << " "
+                          << order->price << " " << order->quantity << " " << order->timestamp << endl;
+        }
+    }
+
+    cout << "---------Asks Map---------" << endl;
+    for (auto& [p, orderList] : asks_) {
+        cout << "Price: " << p << endl;
+        for (Order* order : orderList) {
+            cout << "   " << order->orderId << " " << order->participantId << " " << "SELL" << " "
+                          << order->price << " " << order->quantity << " " << order->timestamp << endl;
+        }
+    }
 }
