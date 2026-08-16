@@ -59,6 +59,7 @@ void OrderBook::cancelOrder(U64 orderId) {
     // delete order from hashMap too
     orderCount--;
     orderMap_.erase(orderId);
+    delete order;
 }
 
 void OrderBook::match(int& price, Side& side, vector<U64>& toRemove, U64& quantity) {
@@ -111,13 +112,17 @@ pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantit
 
     if (order == nullptr) return {false, orderId_};
 
+    // store order details before it is deleted from memory
+    Side side = order->side;
+    U64 timestamp = order->timestamp;
+
     // delete order from map
     cancelOrder(orderId);
     
     if (newQuantity == 0) return {false, orderId_}; // if new quantity is 0, take it as order has cancelled
     
     // add new order to map
-    return addOrder(order->side, newPrice, newQuantity, order->timestamp);
+    return addOrder(side, newPrice, newQuantity, timestamp);
 }
 
 bool OrderBook::orderExists(U64 orderId){
