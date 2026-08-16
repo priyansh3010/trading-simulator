@@ -17,10 +17,9 @@ OrderBook::OrderBook() {
 }
 
 pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 timestamp) {
-    vector<U64> toRemove;
     // add to appropriate map and list
     Order* order;
-    match(price, side, toRemove, quantity);
+    match(price, side, quantity);
     if (side == BUY) {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
@@ -36,7 +35,6 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     }
     
     // remove completed orders
-    for (int const& orderId : toRemove) cancelOrder(orderId);
     
     // early return if new order is already completed to avoid it being added to order book
     if (quantity == 0) return {false, orderId_};
@@ -62,7 +60,8 @@ void OrderBook::cancelOrder(U64 orderId) {
     delete order;
 }
 
-void OrderBook::match(int& price, Side& side, vector<U64>& toRemove, U64& quantity) {
+void OrderBook::match(int& price, Side& side, U64& quantity) {
+    vector<U64> toRemove;
     if (side == BUY) {
         for (auto& [p, orderList] : asks_) {
             if (p > price) break; // break outer loop if p becomes greater than maximum buy price
@@ -72,8 +71,7 @@ void OrderBook::match(int& price, Side& side, vector<U64>& toRemove, U64& quanti
                 if (quantity >= order->quantity) {
                     quantity -= order->quantity;
                     
-                    // just 'cancel' sell order for now (it is complete)
-                    // will create seperate function for completed orders later
+                    // 'cancel' sell order for now (it is complete)
                     toRemove.push_back(order->orderId);
                 }
                 else {
@@ -93,8 +91,7 @@ void OrderBook::match(int& price, Side& side, vector<U64>& toRemove, U64& quanti
                     quantity -= order->quantity;
                     order->quantity = 0;
                     
-                    // just 'cancel' sell order for now (it is complete)
-                    // will create seperate function for completed orders later
+                    // 'cancel' sell order for now (it is complete)
                     toRemove.push_back(order->orderId);
                 }
                 else {
@@ -104,6 +101,9 @@ void OrderBook::match(int& price, Side& side, vector<U64>& toRemove, U64& quanti
             }
         }
     }
+
+    // delete completed orders
+    for (int const& orderId : toRemove) cancelOrder(orderId);
 }
 
 pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {

@@ -25,7 +25,7 @@ public:
     pair<bool, U64> addOrder(Side side, int price, U64 quantity, U64 timestamp);
     void cancelOrder(U64 orderId);
     pair<bool, U64> updateOrder(U64 orderId, int newPrice, int newQuantity);
-    void match(int& price, Side& side, vector<U64>& toRemove, U64& quantity);
+    void match(int& price, Side& side, U64& quantity);
     bool orderExists(U64 orderId);
     Order* getOrder(U64 orderId);
     int getDepth(int price, Side side);
