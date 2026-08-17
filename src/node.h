@@ -1,12 +1,14 @@
 #pragma once
 #include "types.h"
 #include "order.h"
+#include <utility>
 
 struct Node {
     Node* left;
     Node* right;
     Order* order;
+    pair<Node*, Node*>* DLL;
 
-    Node(Order* o) : left(nullptr), right(nullptr), order(o) {}
-    Node(Node* l, Node* r, Order* o) : left(l), right(r), order(o) {}
+    Node() = default;
+    Node(Order* o, pair<Node*, Node*>* d) : left(nullptr), right(nullptr), order(o), DLL(d) {}
 };
