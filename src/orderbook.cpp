@@ -26,7 +26,8 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
             newNode = new Node(order);
-            if (bids_[price] == pair<Node*, Node*>()) { // first entry at this price level
+            auto& DLL = bids_[price];
+            if (DLL == pair<Node*, Node*>()) { // first entry at this price level
                 Node* dummyHead = new Node(new Order());
                 Node* dummyTail = new Node(new Order());
                 
@@ -36,14 +37,14 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
 
-                bids_[price].first = dummyHead; bids_[price].second = dummyTail;
+                DLL.first = dummyHead; DLL.second = dummyTail;
             }
             else {
-                Node* currTail = bids_[price].second->left;
+                Node* currTail = DLL.second->left;
                 currTail->right = newNode;
                 newNode->left = currTail;
-                newNode->right = bids_[price].second;
-                bids_[price].second->left = newNode;
+                newNode->right = DLL.second;
+                DLL.second->left = newNode;
             }
         }
     }
@@ -52,7 +53,8 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
             newNode = new Node(order);
-            if (asks_[price] == pair<Node*, Node*>()) { // first entry at this price level
+            auto& DLL = asks_[price];
+            if (DLL == pair<Node*, Node*>()) { // first entry at this price level
                 Node* dummyHead = new Node(new Order());
                 Node* dummyTail = new Node(new Order());
                 
@@ -62,14 +64,14 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
 
-                asks_[price].first = dummyHead; asks_[price].second = dummyTail;
+                DLL.first = dummyHead; DLL.second = dummyTail;
             }
             else {
-                Node* currTail = asks_[price].second->left;
+                Node* currTail = DLL.second->left;
                 currTail->right = newNode;
                 newNode->left = currTail;
-                newNode->right = asks_[price].second;
-                asks_[price].second->left = newNode;
+                newNode->right = DLL.second;
+                DLL.second->left = newNode;
             }
         }
     }
