@@ -15,28 +15,41 @@ OrderBook::OrderBook() {
     orderId_ = 0;
     participantId_ = 0;
     orderCount = 0;
+    nodeMap_.reserve(1100000);
+    orderMap_.reserve(1100000);
+    isValid_.reserve(1100000);
+
+
+    for (int i = 0; i < 1100000; i++) {
+        nodeMap_[i] = new Node();
+        orderMap_[i] = new Order();
+        isValid_[i] = false;
+    }
 }
 
 pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 timestamp) {
     // add to appropriate map and list
-    Order* order;
-    Node* newNode;
+    Order* order = orderMap_[orderId_];
+    Node* newNode = nodeMap_[orderId_];
     match(price, side, quantity);
     if (side == BUY) {
         if (quantity > 0) {
-            order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
+            order->orderId = orderId_;
+            order->quantity = quantity; order->participantId = participantId_; order->side = side;
+            order->price = price; order->quantity = quantity; order->timestamp = timestamp;
             auto* DLL = &bids_[price];
-            newNode = new Node(order, DLL);
+            newNode->order = order;
+            newNode->DLL = DLL;
             if (*DLL == pair<Node*, Node*>()) { // first entry at this price level
                 Node* dummyHead = new Node();
                 Node* dummyTail = new Node();
                 
                 newNode->left = dummyHead;
                 newNode->right = dummyTail;
-
+                
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
-
+                
                 newNode->DLL = DLL;
                 
                 DLL->first = dummyHead; DLL->second = dummyTail;
@@ -54,9 +67,12 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     
     else {
         if (quantity > 0) {
-            order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
+            order->orderId = orderId_;
+            order->quantity = quantity; order->participantId = participantId_; order->side = side;
+            order->price = price; order->quantity = quantity; order->timestamp = timestamp;
             auto* DLL = &asks_[price];
-            newNode = new Node(order, DLL);
+            newNode->order = order;
+            newNode->DLL = DLL;
             if (*DLL == pair<Node*, Node*>()) { // first entry at this price level
                 Node* dummyHead = new Node();
                 Node* dummyTail = new Node();
@@ -85,15 +101,17 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     if (quantity == 0) return {false, orderId_};
     
     // add to hashmap for quick lookups for future
-    orderMap_[orderId_] = newNode;
+    nodeMap_[orderId_] = newNode;
+    orderMap_[orderId_] = order;
+    isValid_[orderId_] = true;
     orderId_++; // increment order id for now. more sophistication later on
     orderCount++; 
-    return {true, order->orderId};
+    return {true, orderId_ - 1};
 }
 
 void OrderBook::cancelOrder(U64 orderId) {
     // access node in question
-    Node* node = orderMap_[orderId];
+    Node* node = nodeMap_[orderId];
     
     // unlink node in DLL according to where it is in its DLL
     Node* left = node->left;
@@ -115,8 +133,7 @@ void OrderBook::cancelOrder(U64 orderId) {
 
     // delete node from hashMap too
     orderCount--;
-    orderMap_.erase(orderId);
-    delete node;
+    isValid_[node->order->orderId] = false;
 }
 
 void OrderBook::match(int& price, Side& side, U64& quantity) {
@@ -178,7 +195,7 @@ void OrderBook::match(int& price, Side& side, U64& quantity) {
 
 pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
     // access order in question
-    Node* node = orderMap_.find(orderId) != orderMap_.end() ? orderMap_[orderId] : nullptr;
+    Node* node = isValid_[orderId] ? nodeMap_[orderId] : nullptr;
 
     if (node == nullptr) return {false, orderId_};
 
@@ -196,11 +213,11 @@ pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantit
 }
 
 bool OrderBook::orderExists(U64 orderId){
-    return orderMap_.find(orderId) != orderMap_.end();
+    return isValid_[orderId];
 }
 
 Order* OrderBook::getOrder(U64 orderId) {
-    return orderMap_[orderId]->order;
+    return nodeMap_[orderId]->order;
 }
 
 int OrderBook::getDepth(int price, Side side) {

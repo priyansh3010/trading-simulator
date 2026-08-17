@@ -4,7 +4,7 @@
 #include "node.h"
 #include <list>
 #include <map>
-#include <unordered_map>
+#include <vector>
 #include <string>
 using namespace std;
 
@@ -20,7 +20,9 @@ private:
     map<int, pair<Node*, Node*>, std::less<int>> asks_;
 
     // Fast lookup: order_id → iterator into the list + side + price
-    unordered_map<U64, Node*> orderMap_;
+    vector<Node*> nodeMap_;
+    vector<Order*> orderMap_;
+    vector<bool> isValid_;
 public:
     OrderBook();
     pair<bool, U64> addOrder(Side side, int price, U64 quantity, U64 timestamp);
