@@ -25,11 +25,11 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     if (side == BUY) {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
-            newNode = new Node(order);
-            auto& DLL = bids_[price];
-            if (DLL == pair<Node*, Node*>()) { // first entry at this price level
-                Node* dummyHead = new Node(new Order());
-                Node* dummyTail = new Node(new Order());
+            auto* DLL = &bids_[price];
+            newNode = new Node(order, DLL);
+            if (*DLL == pair<Node*, Node*>()) { // first entry at this price level
+                Node* dummyHead = new Node();
+                Node* dummyTail = new Node();
                 
                 newNode->left = dummyHead;
                 newNode->right = dummyTail;
@@ -37,14 +37,17 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
 
-                DLL.first = dummyHead; DLL.second = dummyTail;
+                newNode->DLL = DLL;
+                
+                DLL->first = dummyHead; DLL->second = dummyTail;
             }
             else {
-                Node* currTail = DLL.second->left;
+                Node* currTail = DLL->second->left;
                 currTail->right = newNode;
                 newNode->left = currTail;
-                newNode->right = DLL.second;
-                DLL.second->left = newNode;
+                newNode->right = DLL->second;
+                DLL->second->left = newNode;
+                newNode->DLL = DLL;
             }
         }
     }
@@ -52,26 +55,28 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     else {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
-            newNode = new Node(order);
-            auto& DLL = asks_[price];
-            if (DLL == pair<Node*, Node*>()) { // first entry at this price level
-                Node* dummyHead = new Node(new Order());
-                Node* dummyTail = new Node(new Order());
+            auto* DLL = &asks_[price];
+            newNode = new Node(order, DLL);
+            if (*DLL == pair<Node*, Node*>()) { // first entry at this price level
+                Node* dummyHead = new Node();
+                Node* dummyTail = new Node();
                 
                 newNode->left = dummyHead;
                 newNode->right = dummyTail;
+                
+                newNode->DLL = DLL;
 
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
 
-                DLL.first = dummyHead; DLL.second = dummyTail;
+                DLL->first = dummyHead; DLL->second = dummyTail;
             }
             else {
-                Node* currTail = DLL.second->left;
+                Node* currTail = DLL->second->left;
                 currTail->right = newNode;
                 newNode->left = currTail;
-                newNode->right = DLL.second;
-                DLL.second->left = newNode;
+                newNode->right = DLL->second;
+                DLL->second->left = newNode;
             }
         }
     }
@@ -95,9 +100,9 @@ void OrderBook::cancelOrder(U64 orderId) {
     Node* right = node->right;
     
     if (left->left == nullptr && right->right == nullptr) { // only one order exists at this price level
-        auto& DLL = node->order->side == BUY ? bids_[node->order->price] : asks_[node->order->price];
-        DLL.first = nullptr;
-        DLL.second = nullptr;
+        auto* DLL = node->DLL;
+        DLL->first = nullptr;
+        DLL->second = nullptr;
     }
     else if (right->right == nullptr) { // is the tail node
         node->right->left = left;
