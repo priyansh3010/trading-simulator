@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 #include "order.h"
+#include "node.h"
 #include <list>
 #include <map>
 #include <unordered_map>
@@ -13,13 +14,13 @@ private:
     U64 participantId_;
     int orderCount;
     // Bids: sorted descending by price  
-    map<int, list<Order*>, std::greater<double>> bids_;
+    map<int, pair<Node*, Node*>, std::greater<int>> bids_;
     
     // Asks: sorted ascending by price  
-    map<int, list<Order*>, std::less<double>> asks_;
+    map<int, pair<Node*, Node*>, std::less<int>> asks_;
 
     // Fast lookup: order_id → iterator into the list + side + price
-    unordered_map<U64, Order*> orderMap_;
+    unordered_map<U64, Node*> orderMap_;
 public:
     OrderBook();
     pair<bool, U64> addOrder(Side side, int price, U64 quantity, U64 timestamp);

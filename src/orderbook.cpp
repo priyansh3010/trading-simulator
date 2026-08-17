@@ -2,6 +2,7 @@
 #include "types.h"
 #include "order.h"
 #include "orderbook.h"
+#include "node.h"
 #include <list>
 #include <map>
 #include <unordered_map>
@@ -19,55 +20,110 @@ OrderBook::OrderBook() {
 pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 timestamp) {
     // add to appropriate map and list
     Order* order;
+    Node* newNode;
     match(price, side, quantity);
     if (side == BUY) {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
-            bids_[price].push_back(order);
+            newNode = new Node(order);
+            if (bids_[price] == pair<Node*, Node*>()) { // first entry at this price level
+                Node* dummyHead = new Node(new Order());
+                Node* dummyTail = new Node(new Order());
+                
+                newNode->left = dummyHead;
+                newNode->right = dummyTail;
+
+                dummyHead->right = newNode;
+                dummyTail->left = newNode;
+
+                bids_[price].first = dummyHead; bids_[price].second = dummyTail;
+            }
+            else {
+                Node* currTail = bids_[price].second->left;
+                currTail->right = newNode;
+                newNode->left = currTail;
+                newNode->right = bids_[price].second;
+                bids_[price].second->left = newNode;
+            }
         }
     }
     
     else {
         if (quantity > 0) {
             order = new Order(orderId_, participantId_, side, price, quantity, timestamp);
-            asks_[price].push_back(order);
+            newNode = new Node(order);
+            if (asks_[price] == pair<Node*, Node*>()) { // first entry at this price level
+                Node* dummyHead = new Node(new Order());
+                Node* dummyTail = new Node(new Order());
+                
+                newNode->left = dummyHead;
+                newNode->right = dummyTail;
+
+                dummyHead->right = newNode;
+                dummyTail->left = newNode;
+
+                asks_[price].first = dummyHead; asks_[price].second = dummyTail;
+            }
+            else {
+                Node* currTail = asks_[price].second->left;
+                currTail->right = newNode;
+                newNode->left = currTail;
+                newNode->right = asks_[price].second;
+                asks_[price].second->left = newNode;
+            }
         }
     }
-    
-    // remove completed orders
     
     // early return if new order is already completed to avoid it being added to order book
     if (quantity == 0) return {false, orderId_};
     
     // add to hashmap for quick lookups for future
-    orderMap_[orderId_] = order;
+    orderMap_[orderId_] = newNode;
     orderId_++; // increment order id for now. more sophistication later on
     orderCount++; 
     return {true, order->orderId};
 }
 
 void OrderBook::cancelOrder(U64 orderId) {
-    // access order in question
-    Order* order = orderMap_[orderId];
+    // access node in question
+    Node* node = orderMap_[orderId];
     
-    // delete order from the map and list it is in
-    if (order->side == BUY) bids_[order->price].remove(order);
-    else asks_[order->price].remove(order);
+    // unlink node in DLL according to where it is in its DLL
+    Node* left = node->left;
+    Node* right = node->right;
     
-    // delete order from hashMap too
+    if (left->left == nullptr && right->right == nullptr) { // only one order exists at this price level
+        auto& DLL = node->order->side == BUY ? bids_[node->order->price] : asks_[node->order->price];
+        DLL.first = nullptr;
+        DLL.second = nullptr;
+    }
+    else if (right->right == nullptr) { // is the tail node
+        node->right->left = left;
+        node->left->right = right;
+    }
+    else { // is a node in the middle of the DLL, or a head node
+        node->left->right = right;
+        node->right->left = left;
+    }
+
+    // delete node from hashMap too
     orderCount--;
     orderMap_.erase(orderId);
-    delete order;
+    delete node;
 }
 
 void OrderBook::match(int& price, Side& side, U64& quantity) {
     vector<U64> toRemove;
     if (side == BUY) {
-        for (auto& [p, orderList] : asks_) {
+        for (auto& [p, DLL] : asks_) {
             if (p > price) break; // break outer loop if p becomes greater than maximum buy price
             if (quantity == 0) break; // early break for order completion before insertion
+            if (DLL == pair<Node*, Node*>()) continue;
+
+            Node* traverse = DLL.first->right;
             
-            for (Order* order : orderList) {
+            while (traverse != DLL.second && quantity > 0) {
+                Order* order = traverse->order;
                 if (quantity >= order->quantity) {
                     quantity -= order->quantity;
                     
@@ -77,19 +133,24 @@ void OrderBook::match(int& price, Side& side, U64& quantity) {
                 else {
                     order->quantity -= quantity;
                     quantity = 0;
-                } 
+                }
+
+                traverse = traverse->right;
             }
         }
     }
     else {
-        for (auto& [p, orderList] : bids_) {
+        for (auto& [p, DLL] : bids_) {
             if (p < price) break; // break outer loop if p becomes lesser than minimum sell price
             if (quantity == 0) break; // early break for order completion before insertion
+            if (DLL == pair<Node*, Node*>()) continue;
+
+            Node* traverse = DLL.first->right;
             
-            for (Order* order : orderList) {
+            while (traverse != DLL.second && quantity > 0) {
+                Order* order = traverse->order;
                 if (quantity >= order->quantity) {
                     quantity -= order->quantity;
-                    order->quantity = 0;
                     
                     // 'cancel' sell order for now (it is complete)
                     toRemove.push_back(order->orderId);
@@ -97,7 +158,9 @@ void OrderBook::match(int& price, Side& side, U64& quantity) {
                 else {
                     order->quantity -= quantity;
                     quantity = 0;
-                } 
+                }
+
+                traverse = traverse->right;
             }
         }
     }
@@ -108,13 +171,13 @@ void OrderBook::match(int& price, Side& side, U64& quantity) {
 
 pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
     // access order in question
-    Order* order = orderMap_.find(orderId) != orderMap_.end() ? orderMap_[orderId] : nullptr;
+    Node* node = orderMap_.find(orderId) != orderMap_.end() ? orderMap_[orderId] : nullptr;
 
-    if (order == nullptr) return {false, orderId_};
+    if (node == nullptr) return {false, orderId_};
 
     // store order details before it is deleted from memory
-    Side side = order->side;
-    U64 timestamp = order->timestamp;
+    Side side = node->order->side;
+    U64 timestamp = node->order->timestamp;
 
     // delete order from map
     cancelOrder(orderId);
@@ -130,31 +193,48 @@ bool OrderBook::orderExists(U64 orderId){
 }
 
 Order* OrderBook::getOrder(U64 orderId) {
-    return orderMap_[orderId];
+    return orderMap_[orderId]->order;
 }
 
 int OrderBook::getDepth(int price, Side side) {
-    if (side == BUY)
-        return bids_[price].size();
-    else
-        return asks_[price].size();
+    int count = 0;
+    if (side == BUY) {
+        auto& DLL = bids_[price];
+        if (DLL == pair<Node*, Node*>()) return 0;
+        Node* traverse = DLL.first->right;
+        
+        while (traverse != bids_[price].second) {
+            count++;
+            traverse = traverse->right;
+        }
+    }
+    else {
+        auto& DLL = asks_[price];
+        if (DLL == pair<Node*, Node*>()) return 0;
+        Node* traverse = DLL.first->right;
+
+        while (traverse != asks_[price].second) {
+            count++;
+            traverse = traverse->right;
+        }
+    }
+
+    return count;
 }
 
 int OrderBook::getBestBid() {
-    for (auto& [p, orderList] : bids_) {
-        for (Order* order : orderList) {
-            return order->price;        
-        }
+    for (auto& [p, DLL] : bids_) {
+        if (DLL == pair<Node*, Node*>()) continue;
+        return p;
     }
     
     return -1;
 }
 
 int OrderBook::getBestAsk() {
-    for (auto& [p, orderList] : asks_) {
-        for (Order* order : orderList) {
-            return order->price;        
-        }
+    for (auto& [p, DLL] : asks_) {
+        if (DLL == pair<Node*, Node*>()) continue;
+        return p;
     }
 
     return -1;
@@ -166,20 +246,28 @@ int OrderBook::getOrderCount() {
 
 void OrderBook::printOrders() {
     cout << "---------Bids Map---------" << endl;
-    for (auto& [p, orderList] : bids_) {
+    for (auto& [p, DLL] : bids_) {
         cout << "Price: " << p << endl;
-        for (Order* order : orderList) {
+        if (DLL == pair<Node*, Node*>()) continue;
+        Node* traverse = DLL.first->right;
+        while (traverse != DLL.second) {
+            Order* order = traverse->order;
             cout << "   " << order->orderId << " " << order->participantId << " " << "BUY" << " "
                           << order->price << " " << order->quantity << " " << order->timestamp << endl;
+            traverse = traverse->right;                  
         }
     }
 
     cout << "---------Asks Map---------" << endl;
-    for (auto& [p, orderList] : asks_) {
+    for (auto& [p, DLL] : asks_) {
         cout << "Price: " << p << endl;
-        for (Order* order : orderList) {
+        if (DLL == pair<Node*, Node*>()) continue;
+        Node* traverse = DLL.first->right;
+        while (traverse != DLL.second) {
+            Order* order = traverse->order;
             cout << "   " << order->orderId << " " << order->participantId << " " << "SELL" << " "
                           << order->price << " " << order->quantity << " " << order->timestamp << endl;
+            traverse = traverse->right;                  
         }
     }
 }
