@@ -15,15 +15,26 @@ OrderBook::OrderBook() {
     orderId_ = 0;
     participantId_ = 0;
     orderCount = 0;
+
+    bestBidIndex_ = -1;
+    bestAskIndex_ = -1;
+
     nodeMap_.reserve(1100000);
     orderMap_.reserve(1100000);
     isValid_.reserve(1100000);
-
+    bids_.reserve(50000);
+    asks_.reserve(50000);
+    bidOccupancy_.assign(313, 0ULL);
+    askOccupancy_.assign(313, 0ULL);
 
     for (int i = 0; i < 1100000; i++) {
         nodeMap_[i] = new Node();
         orderMap_[i] = new Order();
         isValid_[i] = 0;
+        if (i < 20000) {
+            bids_[i] = pair<Node*, Node*>();
+            asks_[i] = pair<Node*, Node*>();
+        }
     }
 }
 
@@ -40,17 +51,20 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
             auto* DLL = &bids_[price];
             newNode->order = order;
             newNode->DLL = DLL;
-            if (*DLL == pair<Node*, Node*>()) { // first entry at this price level
+            if (DLL->first == nullptr && DLL->second == nullptr) { // first entry at this price level
                 Node* dummyHead = new Node();
                 Node* dummyTail = new Node();
                 
                 newNode->left = dummyHead;
                 newNode->right = dummyTail;
                 
+                newNode->DLL = DLL;
+                
+                bidOccupancy_[price / 64] |= (1ULL << (price % 64));
+                if (bestBidIndex_ < price || bestBidIndex_ == -1) bestBidIndex_ = price;
+                
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
-                
-                newNode->DLL = DLL;
                 
                 DLL->first = dummyHead; DLL->second = dummyTail;
             }
@@ -64,7 +78,6 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
             }
         }
     }
-    
     else {
         if (quantity > 0) {
             order->orderId = orderId_;
@@ -73,7 +86,7 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
             auto* DLL = &asks_[price];
             newNode->order = order;
             newNode->DLL = DLL;
-            if (*DLL == pair<Node*, Node*>()) { // first entry at this price level
+            if (DLL->first == nullptr && DLL->second == nullptr) { // first entry at this price level
                 Node* dummyHead = new Node();
                 Node* dummyTail = new Node();
                 
@@ -81,10 +94,12 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
                 newNode->right = dummyTail;
                 
                 newNode->DLL = DLL;
-
+                askOccupancy_[price / 64] |= (1ULL << (price % 64));
+                if (bestAskIndex_ > price || bestAskIndex_ == -1) bestAskIndex_ = price;
+                
                 dummyHead->right = newNode;
                 dummyTail->left = newNode;
-
+                
                 DLL->first = dummyHead; DLL->second = dummyTail;
             }
             else {
@@ -106,6 +121,7 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     isValid_[orderId_] = 1;
     orderId_++; // increment order id for now. more sophistication later on
     orderCount++; 
+
     return {true, orderId_ - 1};
 }
 
@@ -121,6 +137,18 @@ void OrderBook::cancelOrder(U64 orderId) {
         auto* DLL = node->DLL;
         DLL->first = nullptr;
         DLL->second = nullptr;
+
+        int price = node->order->price;
+        Side side = node->order->side;
+
+        if (side == BUY) {
+            bidOccupancy_[price / 64] &= ~(1ULL << (price % 64));
+            if (price == bestBidIndex_) recomputeBestBid();
+        } 
+        else {
+            askOccupancy_[price / 64] &= ~(1ULL << (price % 64));    
+            if (price == bestAskIndex_) recomputeBestAsk();
+        } 
     }
     else if (right->right == nullptr) { // is the tail node
         node->right->left = left;
@@ -137,13 +165,10 @@ void OrderBook::cancelOrder(U64 orderId) {
 }
 
 void OrderBook::match(int& price, Side& side, U64& quantity) {
-    vector<U64> toRemove;
     if (side == BUY) {
-        for (auto& [p, DLL] : asks_) {
-            if (p > price) break; // break outer loop if p becomes greater than maximum buy price
-            if (quantity == 0) break; // early break for order completion before insertion
-            if (DLL == pair<Node*, Node*>()) continue;
-
+        while (bestAskIndex_ != -1 && bestAskIndex_ <= price && quantity > 0) { // loop only while bestAsk price is greater than curr price and quantity > 0            
+            vector<U64> toRemove;
+            auto& DLL = asks_[bestAskIndex_];
             Node* traverse = DLL.first->right;
             
             while (traverse != DLL.second && quantity > 0) {
@@ -158,17 +183,17 @@ void OrderBook::match(int& price, Side& side, U64& quantity) {
                     order->quantity -= quantity;
                     quantity = 0;
                 }
-
+                
                 traverse = traverse->right;
             }
+            
+            for (int const& orderId : toRemove) cancelOrder(orderId);
         }
     }
     else {
-        for (auto& [p, DLL] : bids_) {
-            if (p < price) break; // break outer loop if p becomes lesser than minimum sell price
-            if (quantity == 0) break; // early break for order completion before insertion
-            if (DLL == pair<Node*, Node*>()) continue;
-
+        while (bestBidIndex_ != -1 && bestBidIndex_ >= price && quantity > 0) { // loop only while bestBid price is less than curr price and quantity > 0            
+            vector<U64> toRemove;
+            auto& DLL = bids_[bestBidIndex_];
             Node* traverse = DLL.first->right;
             
             while (traverse != DLL.second && quantity > 0) {
@@ -183,14 +208,13 @@ void OrderBook::match(int& price, Side& side, U64& quantity) {
                     order->quantity -= quantity;
                     quantity = 0;
                 }
-
+                
                 traverse = traverse->right;
             }
+
+            for (int const& orderId : toRemove) cancelOrder(orderId);
         }
     }
-
-    // delete completed orders
-    for (int const& orderId : toRemove) cancelOrder(orderId);
 }
 
 pair<bool, U64> OrderBook::updateOrder(U64 orderId, int newPrice, int newQuantity) {
@@ -224,7 +248,7 @@ int OrderBook::getDepth(int price, Side side) {
     int count = 0;
     if (side == BUY) {
         auto& DLL = bids_[price];
-        if (DLL == pair<Node*, Node*>()) return 0;
+        if (DLL.first == nullptr && DLL.second == nullptr) return 0;
         Node* traverse = DLL.first->right;
         
         while (traverse != bids_[price].second) {
@@ -234,7 +258,7 @@ int OrderBook::getDepth(int price, Side side) {
     }
     else {
         auto& DLL = asks_[price];
-        if (DLL == pair<Node*, Node*>()) return 0;
+        if (DLL.first == nullptr && DLL.second == nullptr) return 0;
         Node* traverse = DLL.first->right;
 
         while (traverse != asks_[price].second) {
@@ -246,22 +270,44 @@ int OrderBook::getDepth(int price, Side side) {
     return count;
 }
 
-int OrderBook::getBestBid() {
-    for (auto& [p, DLL] : bids_) {
-        if (DLL == pair<Node*, Node*>()) continue;
-        return p;
+void OrderBook::recomputeBestBid() {
+    int wordIdx = bestBidIndex_ / 64;
+    // mask out bits above bestBidIdx_ within its own word
+    // we're looking for the next-highest occupied bit at or below where best just was
+    U64 word = bidOccupancy_[wordIdx] & ((1ULL << (bestBidIndex_ % 64 + 1)) - 1);
+    while (word == 0 && wordIdx > 0) {
+        word = bidOccupancy_[--wordIdx];
     }
-    
-    return -1;
+    if (word == 0) { // book empty
+        bestBidIndex_ = -1; 
+        return; 
+    }
+    int bitInWord = getMSB(word); // highest set bit in this word
+    bestBidIndex_ = wordIdx * 64 + bitInWord;
+}
+
+void OrderBook::recomputeBestAsk() {
+    int wordIdx = bestAskIndex_ / 64;
+    // mask out bits below bestAskIdx_ within its own word
+    // we're looking for the next-lowest occupied bit at or above where best just was
+    U64 word = askOccupancy_[wordIdx] & ~((1ULL << (bestAskIndex_ % 64)) - 1);
+    while (word == 0 && wordIdx < 312) {
+        word = askOccupancy_[++wordIdx];
+    }
+    if (word == 0) { // book empty
+        bestAskIndex_ = -1;
+        return;
+    }
+    int bitInWord = getLSB(word); // lowest set bit in this word
+    bestAskIndex_ = wordIdx * 64 + bitInWord;
+}
+
+int OrderBook::getBestBid() {
+    return bestBidIndex_;
 }
 
 int OrderBook::getBestAsk() {
-    for (auto& [p, DLL] : asks_) {
-        if (DLL == pair<Node*, Node*>()) continue;
-        return p;
-    }
-
-    return -1;
+    return bestAskIndex_;
 }
 
 int OrderBook::getOrderCount() {
@@ -270,9 +316,10 @@ int OrderBook::getOrderCount() {
 
 void OrderBook::printOrders() {
     cout << "---------Bids Map---------" << endl;
-    for (auto& [p, DLL] : bids_) {
-        cout << "Price: " << p << endl;
+    for (int i = 49999; i >= 0; i--) {
+        auto& DLL = bids_[i];
         if (DLL == pair<Node*, Node*>()) continue;
+        cout << "Price: " << i << endl;
         Node* traverse = DLL.first->right;
         while (traverse != DLL.second) {
             Order* order = traverse->order;
@@ -283,9 +330,10 @@ void OrderBook::printOrders() {
     }
 
     cout << "---------Asks Map---------" << endl;
-    for (auto& [p, DLL] : asks_) {
-        cout << "Price: " << p << endl;
+    for (int i = 0; i < 50000; i++) {
+        auto& DLL = asks_[i];
         if (DLL == pair<Node*, Node*>()) continue;
+        cout << "Price: " << i << endl;
         Node* traverse = DLL.first->right;
         while (traverse != DLL.second) {
             Order* order = traverse->order;

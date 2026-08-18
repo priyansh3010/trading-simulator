@@ -14,10 +14,14 @@ private:
     U64 participantId_;
     int orderCount;
     // Bids: sorted descending by price  
-    map<int, pair<Node*, Node*>, std::greater<int>> bids_;
+    vector<pair<Node*, Node*>> bids_;
+    vector<U64> bidOccupancy_;
+    int bestBidIndex_;
     
     // Asks: sorted ascending by price  
-    map<int, pair<Node*, Node*>, std::less<int>> asks_;
+    vector<pair<Node*, Node*>> asks_;
+    vector<U64> askOccupancy_;
+    int bestAskIndex_;
 
     // Fast lookup: order_id → iterator into the list + side + price
     vector<Node*> nodeMap_;
@@ -32,6 +36,8 @@ public:
     bool orderExists(U64 orderId);
     Order* getOrder(U64 orderId);
     int getDepth(int price, Side side);
+    void recomputeBestBid();
+    void recomputeBestAsk();
     int getBestBid();
     int getBestAsk();
     int getOrderCount();
