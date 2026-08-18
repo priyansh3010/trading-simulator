@@ -22,7 +22,7 @@ private:
     // Fast lookup: order_id → iterator into the list + side + price
     vector<Node*> nodeMap_;
     vector<Order*> orderMap_;
-    vector<bool> isValid_;
+    vector<uint8_t> isValid_;
 public:
     OrderBook();
     pair<bool, U64> addOrder(Side side, int price, U64 quantity, U64 timestamp);

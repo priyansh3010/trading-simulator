@@ -23,7 +23,7 @@ OrderBook::OrderBook() {
     for (int i = 0; i < 1100000; i++) {
         nodeMap_[i] = new Node();
         orderMap_[i] = new Order();
-        isValid_[i] = false;
+        isValid_[i] = 0;
     }
 }
 
@@ -103,7 +103,7 @@ pair<bool, U64> OrderBook::addOrder(Side side, int price, U64 quantity, U64 time
     // add to hashmap for quick lookups for future
     nodeMap_[orderId_] = newNode;
     orderMap_[orderId_] = order;
-    isValid_[orderId_] = true;
+    isValid_[orderId_] = 1;
     orderId_++; // increment order id for now. more sophistication later on
     orderCount++; 
     return {true, orderId_ - 1};
@@ -133,7 +133,7 @@ void OrderBook::cancelOrder(U64 orderId) {
 
     // delete node from hashMap too
     orderCount--;
-    isValid_[node->order->orderId] = false;
+    isValid_[node->order->orderId] = 0;
 }
 
 void OrderBook::match(int& price, Side& side, U64& quantity) {
