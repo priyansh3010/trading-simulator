@@ -8,7 +8,8 @@ struct Node {
     Node* right;
     Order* order;
     pair<Node*, Node*>* DLL;
+    bool emptyDLL;
 
     Node() = default;
-    Node(Order* o, pair<Node*, Node*>* d) : left(nullptr), right(nullptr), order(o), DLL(d) {}
+    Node(Order* o, pair<Node*, Node*>* d) : left(nullptr), right(nullptr), order(o), DLL(d), emptyDLL(false) {}
 };
