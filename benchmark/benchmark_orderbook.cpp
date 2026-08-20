@@ -69,30 +69,30 @@ void reportLatencies(std::vector<int>& latencies) {
     cout << "p99.99  = " << percentile(0.9999) << endl;
 }
 
-int main() {
-    mt19937 generator(30);
+int getDistributionType(int i, mt19937& generator) {
     uniform_int_distribution<int> uniformPrice(14500, 15500);
     exponential_distribution<double> expPrice(1.0 / 300.0);
     normal_distribution<double> normalPrice(15000, 150.0);
     lognormal_distribution<double> logNormalPrice(std::log(15000), 0.01);
     student_t_distribution<double> studentTPrice(3.0);
     
-    auto getDistributionType = [&](int i) {
-        int p = 15000;
-        switch (i) {
-            case 0: p = uniformPrice(generator); break;
-            case 1: p = 14500 + min(expPrice(generator), 1000.00); break;
-            case 2: p = normalPrice(generator); break;
-            case 3: p = logNormalPrice(generator); break;
-            case 4: p = 15000 + studentTPrice(generator) * 50; break;
-        }
-        
-        p = max(p, 14500);
-        p = min(p, 15500);
-        
-        return p;
-    };
+    int p = 15000;
+    switch (i) {
+        case 0: p = uniformPrice(generator); break;
+        case 1: p = 14500 + min(expPrice(generator), 1000.00); break;
+        case 2: p = normalPrice(generator); break;
+        case 3: p = logNormalPrice(generator); break;
+        case 4: p = 15000 + studentTPrice(generator) * 50; break;
+    }
+    
+    p = max(p, 14500);
+    p = min(p, 15500);
+    
+    return p;
+}
 
+void measurePerOrderLatency() {
+    mt19937 generator(30);
     vector<string> distributions = {"Uniform" , "Exponential", "Normal", "Log Normal", "Student T"};
     
     for (int i = 0; i < distributions.size(); i++) { // loop for going through all 5 distributions
@@ -108,14 +108,14 @@ int main() {
         cout << "Beginning benchmark #" << i + 1 << " for " << distributions[i] << "." << endl;
         for (int j = 0; j < 1000000; j++) {            
             // adding order
-            int price = getDistributionType(i);
+            int price = getDistributionType(i, generator);
             Side side = j % 2 == 0 ? BUY : SELL;
             int quantity = 15 + (j % 10);
             int timestamp = 100000 + j;
             
-            const auto t1 = chrono::high_resolution_clock::now();
+            const auto t1 = chrono::steady_clock::now();
             auto newOrderInfo = book.addOrder(side, price, quantity, timestamp);
-            const auto t2 = chrono::high_resolution_clock::now();
+            const auto t2 = chrono::steady_clock::now();
             
             if (newOrderInfo.first) activeOrders.push_back(newOrderInfo.second);
             
@@ -127,4 +127,9 @@ int main() {
         cout << distributions[i] << " statistics:" << endl;
         reportLatencies(latencies);
     }
+}
+
+int main() {
+    cout << "Measuring Per Order Latencies: " << endl;
+    measurePerOrderLatency();
 }
