@@ -69,6 +69,13 @@ void reportLatencies(std::vector<int>& latencies) {
     cout << "p99.99  = " << percentile(0.9999) << endl;
 }
 
+void reportThroughput(const chrono::nanoseconds& elapsed, const int TESTSIZE) {
+    double elapsedSeconds = elapsed.count() / 1e9;
+    double throughput = TESTSIZE / elapsedSeconds;
+    cout << TESTSIZE << " orders / " << elapsedSeconds << " s = "
+         << throughput << " orders per second." << endl;
+}
+
 int getDistributionType(int i, mt19937& generator) {
     uniform_int_distribution<int> uniformPrice(14500, 15500);
     exponential_distribution<double> expPrice(1.0 / 300.0);
@@ -91,9 +98,7 @@ int getDistributionType(int i, mt19937& generator) {
     return p;
 }
 
-void measurePerOrderLatency() {
-    mt19937 generator(30);
-    vector<string> distributions = {"Uniform" , "Exponential", "Normal", "Log Normal", "Student T"};
+void measurePerOrderLatency(mt19937& generator, vector<string>& distributions) {
     
     for (int i = 0; i < distributions.size(); i++) { // loop for going through all 5 distributions
         OrderBook book;
@@ -123,13 +128,50 @@ void measurePerOrderLatency() {
             const chrono::duration<int, nano> elapsed = t2 - t1;
             latencies.push_back(elapsed.count() > 0 ? elapsed.count() : 0);
         }
-
+        
         cout << distributions[i] << " statistics:" << endl;
         reportLatencies(latencies);
     }
 }
 
+void measureOrderThroughput(mt19937& generator, vector<string>& distributions) {
+    const int TESTSIZE = 10000000;
+    
+    for (int i = 0; i < distributions.size(); i++) {
+        vector<pair<int, int>> priceAndQuantity;
+        priceAndQuantity.reserve(TESTSIZE);
+        // first we need to get 10 million mock price and quantities and store in priceAndQuantity
+        for (int j = 0; j < priceAndQuantity.capacity(); j++) {
+            pair<int, int> newOrderPair = {getDistributionType(i, generator), 15 + (j % 10)};
+            priceAndQuantity.push_back(newOrderPair);
+        }
+        
+        OrderBook book;
+        populateBook(book, generator);
+        cout << "Beginning throughput benchmark #" << i + 1 << " for " << distributions[i] << "." << endl;
+        
+        const auto t1 = chrono::steady_clock::now();
+        for (int j = 0; j < TESTSIZE; j++) {
+            const auto& p = priceAndQuantity[j];
+            book.addOrder(j % 2 == 0 ? BUY : SELL, p.first, p.second, 100000 + j);
+        }
+        const auto t2 = chrono::steady_clock::now();
+        
+        const chrono::duration<int, nano> elapsed = t2 - t1;
+        cout << "Made it here" << endl;
+        cout << "Throughput benchmark #" << i + 1 << " for " << distributions[i] << "." << endl;
+        reportThroughput(elapsed, TESTSIZE);
+    }
+}
+
 int main() {
+    mt19937 generator(30);
+    vector<string> distributions = {"Uniform" , "Exponential", "Normal", "Log Normal", "Student T"};
     cout << "Measuring Per Order Latencies: " << endl;
-    measurePerOrderLatency();
+    measurePerOrderLatency(generator, distributions);
+
+    cout << endl;
+
+    cout << "Measuring Order throughput (adding orders per second)" << endl;
+    measureOrderThroughput(generator, distributions);
 }
