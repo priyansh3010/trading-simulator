@@ -11,6 +11,8 @@
 #include <iostream>
 using namespace std;
 
+const int MAXORDERS = 10100000;
+
 OrderBook::OrderBook() {
     orderId_ = 0;
     participantId_ = 0;
@@ -19,15 +21,15 @@ OrderBook::OrderBook() {
     bestBidIndex_ = -1;
     bestAskIndex_ = -1;
 
-    nodeMap_.reserve(1100000);
-    orderMap_.reserve(1100000);
-    isValid_.reserve(1100000);
+    nodeMap_.reserve(MAXORDERS);
+    orderMap_.reserve(MAXORDERS);
+    isValid_.reserve(MAXORDERS);
     bids_.reserve(50000);
     asks_.reserve(50000);
     bidOccupancy_.assign(313, 0ULL);
     askOccupancy_.assign(313, 0ULL);
 
-    for (int i = 0; i < 1100000; i++) {
+    for (int i = 0; i < MAXORDERS; i++) {
         nodeMap_[i] = new Node();
         orderMap_[i] = new Order();
         isValid_[i] = 0;
