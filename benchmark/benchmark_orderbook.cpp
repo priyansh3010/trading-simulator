@@ -12,6 +12,32 @@
 using namespace std;
 
 static int timeStamp = 1;
+static double nsPerCycle = 0;
+
+inline U64 rdtscSerialized() {
+    _mm_lfence();
+    U64 t = __rdtsc();
+    _mm_lfence();
+    return t;
+}
+
+void calibrateNsPerCycle() {
+    auto wallStart = chrono::steady_clock::now();
+    U64 tscStart = rdtscSerialized();
+
+    // Busy-wait ~200ms so the calibration window is long enough to be accurate
+    while (chrono::duration_cast<chrono::milliseconds>(
+               chrono::steady_clock::now() - wallStart).count() < 200) {}
+
+    U64 tscEnd = rdtscSerialized();
+    auto wallEnd = chrono::steady_clock::now();
+
+    double wallSeconds = chrono::duration<double>(wallEnd - wallStart).count();
+    double cyclesPerSecond = (tscEnd - tscStart) / wallSeconds;
+    nsPerCycle = 1e9 / cyclesPerSecond;
+
+    cout << "Calibrated TSC frequency: " << cyclesPerSecond / 1e9 << " GHz" << endl;
+}
 
 void populateBook(OrderBook& book, mt19937& generator) {
     normal_distribution<double> W;
@@ -69,8 +95,8 @@ void reportLatencies(std::vector<int>& latencies) {
     cout << "p99.99  = " << percentile(0.9999) << endl;
 }
 
-void reportThroughput(const chrono::nanoseconds& elapsed, const int TESTSIZE) {
-    double elapsedSeconds = elapsed.count() / 1e9;
+void reportThroughput(const auto& elapsed, const int TESTSIZE) {
+    double elapsedSeconds = elapsed / 1e9;
     double throughput = TESTSIZE / elapsedSeconds;
     cout << TESTSIZE << " orders / " << elapsedSeconds << " s = "
          << throughput << " orders per second." << endl;
@@ -118,15 +144,15 @@ void measurePerOrderLatency(mt19937& generator, vector<string>& distributions) {
             int quantity = 15 + (j % 10);
             int timestamp = 100000 + j;
             
-            const auto t1 = chrono::steady_clock::now();
+            U64 t1 = rdtscSerialized();
             auto newOrderInfo = book.addOrder(side, price, quantity, timestamp);
-            const auto t2 = chrono::steady_clock::now();
+            U64 t2 = rdtscSerialized();
             
             if (newOrderInfo.first) activeOrders.push_back(newOrderInfo.second);
             
             // calculate time taken
-            const chrono::duration<int, nano> elapsed = t2 - t1;
-            latencies.push_back(elapsed.count() > 0 ? elapsed.count() : 0);
+            // const chrono::duration<int, nano> elapsed = t2 - t1;
+            latencies.push_back((t2 - t1) * nsPerCycle);
         }
         
         cout << distributions[i] << " statistics:" << endl;
@@ -150,21 +176,21 @@ void measureOrderThroughput(mt19937& generator, vector<string>& distributions) {
         populateBook(book, generator);
         cout << "Beginning throughput benchmark #" << i + 1 << " for " << distributions[i] << "." << endl;
         
-        const auto t1 = chrono::steady_clock::now();
+        const auto t1 = rdtscSerialized();
         for (int j = 0; j < TESTSIZE; j++) {
             const auto& p = priceAndQuantity[j];
             book.addOrder(j % 2 == 0 ? BUY : SELL, p.first, p.second, 100000 + j);
         }
-        const auto t2 = chrono::steady_clock::now();
+        const auto t2 = rdtscSerialized();
         
-        const chrono::duration<int, nano> elapsed = t2 - t1;
-        cout << "Made it here" << endl;
+        const auto elapsed = (t2 - t1) * nsPerCycle;
         cout << "Throughput benchmark #" << i + 1 << " for " << distributions[i] << "." << endl;
         reportThroughput(elapsed, TESTSIZE);
     }
 }
 
 int main() {
+    calibrateNsPerCycle();
     mt19937 generator(30);
     vector<string> distributions = {"Uniform" , "Exponential", "Normal", "Log Normal", "Student T"};
     cout << "Measuring Per Order Latencies: " << endl;
