@@ -1,7 +1,6 @@
 #pragma once
 #include "types.h"
 #include "order.h"
-#include "node.h"
 #include <list>
 #include <map>
 #include <vector>
@@ -13,18 +12,18 @@ private:
     U64 orderId_;
     U64 participantId_;
     int orderCount;
+
     // Bids: sorted descending by price  
-    vector<pair<Node*, Node*>> bids_;
+    vector<pair<Order*, Order*>> bids_;
     vector<U64> bidOccupancy_;
     int bestBidIndex_;
     
     // Asks: sorted ascending by price  
-    vector<pair<Node*, Node*>> asks_;
+    vector<pair<Order*, Order*>> asks_;
     vector<U64> askOccupancy_;
     int bestAskIndex_;
 
     // Fast lookup: order_id → iterator into the list + side + price
-    vector<Node*> nodeMap_;
     vector<Order*> orderMap_;
     vector<U8> isValid_;
 public:

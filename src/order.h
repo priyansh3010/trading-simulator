@@ -1,5 +1,6 @@
 #pragma once
 #include "types.h"
+#include <utility>
 using namespace std;
 
 struct Order {
@@ -9,6 +10,10 @@ struct Order {
     int price; // in cents - 10050 = $100.50
     U64 quantity;
     U64 timestamp;
+    Order* left;
+    Order* right;
+    pair<Order*, Order*>* DLL;
+    bool emptyDLL;
 
     Order() = default;
 
